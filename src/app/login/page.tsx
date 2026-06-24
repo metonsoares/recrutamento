@@ -27,15 +27,18 @@ export default function LoginPage() {
     const supabase = createSupabaseBrowserClient()
     supabase.auth
       .setSession({ access_token, refresh_token })
-      .then(({ error }) => {
-        window.history.replaceState(null, '', window.location.pathname)
-        if (error) {
+      .then(({ data, error }) => {
+        if (error || !data.session) {
+          window.history.replaceState(null, '', window.location.pathname)
           setSsoLoading(false)
           setError('Não foi possível entrar pelo Portal. Tente o login normal.')
           return
         }
-        router.replace('/admin')
-        router.refresh()
+        // Navegação "dura" (full reload): garante que o servidor releia os
+        // cookies de sessão recém-gravados pelo setSession. Um router.replace
+        // client-side não reenvia os cookies a tempo e o guard do /admin
+        // (supabase.auth.getUser no servidor) devolve para o /login.
+        window.location.href = '/admin'
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
