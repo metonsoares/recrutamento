@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,32 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [ssoLoading, setSsoLoading] = useState(false)
+
+  // SSO (Portal BDT): o magic link entrega access_token/refresh_token no #fragment
+  // da URL. O @supabase/ssr (cookie/PKCE) não processa o fluxo implícito sozinho,
+  // então criamos a sessão aqui e seguimos para o painel.
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1))
+    const access_token = hash.get('access_token')
+    const refresh_token = hash.get('refresh_token')
+    if (!access_token || !refresh_token) return
+    setSsoLoading(true)
+    const supabase = createSupabaseBrowserClient()
+    supabase.auth
+      .setSession({ access_token, refresh_token })
+      .then(({ error }) => {
+        window.history.replaceState(null, '', window.location.pathname)
+        if (error) {
+          setSsoLoading(false)
+          setError('Não foi possível entrar pelo Portal. Tente o login normal.')
+          return
+        }
+        router.replace('/admin')
+        router.refresh()
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -40,6 +66,11 @@ export default function LoginPage() {
           <CardDescription>Acesso restrito ao painel administrativo</CardDescription>
         </CardHeader>
         <CardContent>
+          {ssoLoading ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Entrando pelo Portal BDT…
+            </p>
+          ) : (
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
@@ -72,6 +103,7 @@ export default function LoginPage() {
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>
